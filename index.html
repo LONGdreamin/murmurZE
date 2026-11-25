@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#13161d" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -356,9 +357,31 @@ body.kpon #modal .sheetin{padding-bottom:310px}
 .bsc{font-size:12px;color:var(--fg-2);margin-top:2px}.bsc s{color:var(--fg-3)}.bsc.warn{color:#b26a00}
 .bsskip{font-size:12px;color:var(--fg-3);border-top:1px dashed var(--line);padding-top:6px}
 .msed{flex-wrap:wrap;gap:6px}.msed .sren{flex:1;min-width:140px}.msed .ein{width:100%}.msnote{flex-basis:100%;font-size:12px;color:var(--fg-2)}
+.pjbadge{font-size:10.5px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:2px}
+.pjbadge.a{color:var(--fg-3);background:var(--sunk)}
+.stpr.arch{opacity:.8}
+.pjarch{appearance:none;border:0;background:none;color:var(--fg-2);font:inherit;font-size:13px;padding:10px 2px;cursor:pointer}
+.pjhead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin:2px 0 10px}.pjhead b{font-size:18px}.pjsub{font-size:12px;color:var(--fg-3);margin-top:2px}
+.pjcats{display:flex;flex-direction:column;gap:2px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 0}
+.pjcats .stsub{padding:3px 12px}
+.pjyears{margin-bottom:10px}
 .setup{max-width:520px;margin:24px auto;display:flex;flex-direction:column;gap:12px}.setup h2{margin:0;font-size:20px}.setup p{margin:0;color:var(--fg-2);font-size:13.5px}
 .setup label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}.setup .ein{font:inherit;font-size:15px;padding:10px 12px;text-align:left}
 .setmsg{color:var(--neg);font-size:13px}.setnote{font-size:12px!important;color:var(--fg-3)!important}
+.setlinks{display:flex;gap:6px;flex-wrap:wrap}
+.lock{position:fixed;inset:0;z-index:500;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px 16px calc(24px + env(safe-area-inset-bottom));user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.lock[hidden]{display:none}
+body.locked .app,body.locked nav{visibility:hidden}
+.lock h2{margin:0;font-size:18px;font-weight:600}.lock .lsub{font-size:13px;color:var(--fg-3);min-height:18px;text-align:center}
+.lock .lsub.err{color:var(--neg)}
+.ldots{display:flex;gap:14px;height:18px}.ldots i{width:14px;height:14px;border-radius:50%;border:2px solid var(--fg-3)}.ldots i.f{background:var(--fg);border-color:var(--fg)}
+.lkeys{display:grid;grid-template-columns:repeat(3,76px);gap:14px}
+.lkeys button{appearance:none;border:0;width:76px;height:76px;border-radius:50%;background:var(--sunk);color:var(--fg);font:inherit;font-size:26px;cursor:pointer}
+.lkeys button.t{background:none;font-size:14px;color:var(--fg-2)}
+.lkeys button:active{filter:brightness(.85)}
+.lock .lfoot{appearance:none;border:0;background:none;color:var(--accent);font:inherit;font-size:13px;cursor:pointer}
+.lock .lform{display:flex;flex-direction:column;gap:10px;width:min(320px,100%)}.lock .lform .ein{font:inherit;font-size:15px;padding:10px 12px;text-align:left}
+
 .rfbox{font-size:12px;color:var(--fg-2);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:10px;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .lockn{font-size:12px;color:var(--pos);background:color-mix(in srgb,var(--pos) 10%,var(--card));border-radius:8px;padding:8px 10px;margin-bottom:10px}
 .clnote{font-size:12px;color:var(--cl);background:var(--cl-soft);border-radius:8px;padding:8px 10px;margin-bottom:10px}
@@ -674,6 +697,7 @@ body.kpon #modal .sheetin{padding-bottom:310px}
   <button data-v="audit" aria-current="false"><span class="g">⊞</span>核對</button>
 </nav>
 <div id="modal"></div>
+<div id="lock" class="lock" hidden></div>
 <div id="kp" class="kp" hidden role="dialog" aria-label="計算機">
   <div class="kpd"><span id="kpx" class="kpx"></span><b id="kpv" class="kpv">0</b></div>
   <div class="kpg">
@@ -804,7 +828,6 @@ let RDQ=null;
 function rdBatch(range){ return new Promise((res,rej)=>{ if(!RDQ){ RDQ=[]; setTimeout(async()=>{ const q=RDQ; RDQ=null;
       try{ const r=await apiPost("batch_get",{ranges:q.map(x=>x.range)}); const vs=(r.payload&&r.payload.valueRanges)||[]; q.forEach((x,k)=>x.res(vs[k]||[])); }
       catch(e){ if(q.length===1){ q[0].rej(e); return; }
-        // 有某個分頁不存在時，改成逐一讀，讓 .catch(()=>[]) 照常運作
         for(const x of q){ try{ const r1=await apiPost("get_values",{range:x.range}); x.res((r1.payload&&r1.payload.values)||[]); }catch(e1){ x.rej(e1); } } } },0); }
     RDQ.push({range,res,rej}); }); }
 function setupHtml(msg,tmp){ const c=tmp||getCfg()||{};
@@ -817,10 +840,61 @@ function setupHtml(msg,tmp){ const c=tmp||getCfg()||{};
 function showSetup(msg,tmp){ $("view").innerHTML=setupHtml(msg,tmp); $("title").textContent="連線設定"; }
 async function cfgSave(){ const url=$("cfg-url").value.trim(), token=$("cfg-tok").value.trim(); if(!url||!token){ showSetup("兩格都要填",{url,token}); return; }
   const b=$("cfg-go"); b.disabled=true; b.textContent="測試中…";
-  try{ await apiPost("ping",{}, {url,token}); setCfg({url,token}); mcp=apiClient(); toast("連線成功，正在讀取帳本…"); const ok=await pull(); if(!ok) showSetup("連線成功，但讀帳本失敗："+errMsg(lastErr),{url,token}); }
+  try{ await apiPost("ping",{}, {url,token}); setCfg({url,token}); mcp=apiClient(); toast("連線成功，正在讀取帳本…"); const ok=await pull(); if(ok&&!getPin()) lockShow("set"); if(!ok) showSetup("連線成功，但讀帳本失敗："+errMsg(lastErr),{url,token}); }
   catch(e){ showSetup("連不上："+errMsg(e),{url,token}); } }
 document.addEventListener("click",e=>{ if(e.target.closest("#cfg-go")){ cfgSave(); } else if(e.target.closest("#cfg-x")){ render(); } else if(e.target.closest("#cfgopen")){ showSetup(); } });
 if("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+
+/* ── PIN 鎖：4–6 位數字，只存雜湊在這台裝置 ── */
+const PINK="mmjz.pin", LOCKMIN=3;
+const getPin=()=>{ try{ return JSON.parse(localStorage.getItem(PINK)||"null"); }catch(e){ return null; } };
+async function pinHash(pin,salt){ const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(salt+"|"+pin)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join(""); }
+async function pinStore(pin){ const salt=[...crypto.getRandomValues(new Uint8Array(12))].map(x=>x.toString(16).padStart(2,"0")).join(""); localStorage.setItem(PINK,JSON.stringify({salt,h:await pinHash(pin,salt)})); }
+let LK=null, hiddenAt=0;
+function lockShow(mode){ // mode: unlock | set | change-old | forgot
+  LK={mode,buf:"",first:null,fails:LK&&LK.fails||0,until:LK&&LK.until||0,msg:""}; document.body.classList.add("locked"); $("lock").hidden=false; lockPaint(); }
+function lockHide(){ LK=null; $("lock").hidden=true; document.body.classList.remove("locked"); }
+function lockPaint(){ if(!LK) return; const L=$("lock");
+  if(LK.mode==="forgot"){ L.innerHTML=`<h2>忘記 PIN</h2><div class="lsub">輸入「連線設定」用的後端密碼，驗證後可以重設 PIN。</div>
+    <div class="lform"><input id="lk-tok" class="ein" type="password" placeholder="後端密碼" autocomplete="off"><button class="btn primary" id="lk-tokgo">驗證</button><button class="btn" id="lk-back">返回</button></div><div class="lsub err">${esc(LK.msg)}</div>`; return; }
+  const title=LK.mode==="unlock"?"輸入 PIN 解鎖":LK.mode==="change-old"?"輸入目前的 PIN":LK.first?"再輸入一次確認":"設定新的 PIN（4–6 位數字）";
+  const n=Math.max(4,LK.buf.length);
+  L.innerHTML=`<h2>${title}</h2><div class="ldots">${Array.from({length:LK.mode==="unlock"||LK.mode==="change-old"?Math.max(4,LK.buf.length):6},(_,k)=>`<i class="${k<LK.buf.length?"f":""}"></i>`).join("")}</div>
+    <div class="lsub ${LK.msg?"err":""}">${esc(LK.msg||(LK.mode==="set"&&!LK.first?"打 4–6 位數字後按「確定」":""))}</div>
+    <div class="lkeys">${[1,2,3,4,5,6,7,8,9].map(d=>`<button data-lk="${d}">${d}</button>`).join("")}
+      <button class="t" data-lk="bs">刪除</button><button data-lk="0">0</button><button class="t" data-lk="ok">確定</button></div>
+    ${LK.mode==="unlock"?`<button class="lfoot" id="lk-forgot">忘記 PIN？</button>`:LK.mode==="change-old"||(LK.mode==="set"&&getPin())?`<button class="lfoot" id="lk-cancel">取消</button>`:""}`; }
+async function lockKey(k){ if(!LK) return; const now=Date.now();
+  if(LK.until>now){ LK.msg=`錯太多次，請等 ${Math.ceil((LK.until-now)/1000)} 秒`; lockPaint(); return; }
+  if(k==="bs"){ LK.buf=LK.buf.slice(0,-1); LK.msg=""; lockPaint(); return; }
+  if(/^\d$/.test(k)){ if(LK.buf.length<6) LK.buf+=k; LK.msg=""; lockPaint();
+    if((LK.mode==="unlock"||LK.mode==="change-old")&&LK.buf.length>=4) await lockTry(false); return; }
+  if(k==="ok") await lockTry(true); }
+async function lockTry(explicit){ const P=getPin();
+  if(LK.mode==="unlock"||LK.mode==="change-old"){
+    if(!P){ lockHide(); return; }
+    if(await pinHash(LK.buf,P.salt)===P.h){ LK.fails=0; if(LK.mode==="unlock") lockHide(); else { LK.mode="set"; LK.buf=""; LK.first=null; LK.msg=""; lockPaint(); } return; }
+    if(!explicit&&LK.buf.length<6) return; // 還可能是比較長的 PIN
+    LK.fails++; LK.buf=""; LK.msg="PIN 不對"; if(LK.fails>=5){ LK.until=Date.now()+30000; LK.fails=0; LK.msg="錯 5 次，請等 30 秒"; } lockPaint(); return; }
+  if(LK.mode==="set"){
+    if(!/^\d{4,6}$/.test(LK.buf)){ LK.msg="PIN 要 4–6 位數字"; lockPaint(); return; }
+    if(!LK.first){ LK.first=LK.buf; LK.buf=""; LK.msg=""; lockPaint(); return; }
+    if(LK.first!==LK.buf){ LK.first=null; LK.buf=""; LK.msg="兩次不一樣，請重新設定"; lockPaint(); return; }
+    await pinStore(LK.buf); lockHide(); toast("PIN 已設定，之後打開或離開 "+LOCKMIN+" 分鐘就會上鎖"); } }
+document.addEventListener("pointerdown",e=>{ const b=e.target.closest&&e.target.closest("#lock [data-lk]"); if(b){ e.preventDefault(); lockKey(b.dataset.lk); } });
+document.addEventListener("click",async e=>{ if(!e.target.closest) return;
+  if(e.target.closest("#lk-forgot")){ LK.mode="forgot"; LK.msg=""; lockPaint(); }
+  else if(e.target.closest("#lk-back")){ LK.mode="unlock"; LK.buf=""; LK.msg=""; lockPaint(); }
+  else if(e.target.closest("#lk-cancel")){ lockHide(); }
+  else if(e.target.closest("#lk-tokgo")){ const c=getCfg(), v=$("lk-tok").value.trim(); if(c&&v&&v===c.token){ LK.mode="set"; LK.buf=""; LK.first=null; LK.msg=""; lockPaint(); } else { LK.msg="後端密碼不對"; lockPaint(); } }
+  else if(e.target.closest("#pinchg")){ lockShow(getPin()?"change-old":"set"); }
+  else if(e.target.closest("#pinlocknow")){ if(getPin()) lockShow("unlock"); else lockShow("set"); } });
+document.addEventListener("keydown",e=>{ if(!LK||LK.mode==="forgot") return; if(/^\d$/.test(e.key)){ e.preventDefault(); lockKey(e.key); } else if(e.key==="Backspace"){ e.preventDefault(); lockKey("bs"); } else if(e.key==="Enter"){ e.preventDefault(); lockKey("ok"); } });
+document.addEventListener("visibilitychange",()=>{ if(document.hidden){ hiddenAt=Date.now(); } else if(hiddenAt&&Date.now()-hiddenAt>LOCKMIN*60000&&getPin()&&!LK){ lockShow("unlock"); } });
+/* 開啟時：有 PIN 就上鎖；還沒設定就先設定（已有連線設定時） */
+(function(){ const go=()=>{ if(getPin()) lockShow("unlock"); else if(getCfg()) lockShow("set"); };
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",go); else setTimeout(go,0); })();
+
 function vals(r){let p=r&&r.payload;if(typeof p==="string"){try{p=JSON.parse(p)}catch(e){}}return (p&&p.values)||[]}
 async function call(tool,input,isRead){
   try{ return await mcp.callTool(SRV,tool,input) }
@@ -862,7 +936,8 @@ function build(raw){
   let tags=(raw.tgs||[]).filter(r=>r[0]).map((r,k)=>({n:String(r[0]).trim(),g:r[1]||"其他",acc:r[2]||"全部",one:/是/.test(r[3]||""),ord:k}));
   if(!tags.length) tags=["#Line Pay","#Apple Pay"].map(n=>({n,g:"支付",acc:"信用卡",one:true})).concat(["#支付寶","#微信支付"].map(n=>({n,g:"支付",acc:"玉山Unicard,聯邦賴點卡",one:true})),["#玩數位","#樂饗購","#趣旅行","#集精選"].map(n=>({n,g:"Cube 權益",acc:"國泰Cube",one:true})));
   const {mate,auto}=buildMates(tx);
-  D={tx,wo,tags,mate,auto,accounts,pend,people,ck,chk,cyc,meta:{today,groups,months:[...ms].sort(),
+  const projs=new Map((raw.pjs||[]).map((r,k)=>[String(r[0]||"").trim(),{n:String(r[0]||"").trim(),row:k+2,type:r[1]||"活動",s:String(r[2]||"").replace(/\//g,"-"),e:String(r[3]||"").replace(/\//g,"-"),arch:/封存/.test(r[4]||""),note:r[5]||""}]).filter(([k])=>k));
+  D={tx,wo,tags,mate,auto,projs,accounts,pend,people,ck,chk,cyc,meta:{today,groups,months:[...ms].sort(),
      arap:{bal:arTot?num(arTot[4]):0,note:arTot&&arTot[5]?arTot[5]:""},at:raw.at}};
 }
 function fromLedger(j){
@@ -885,9 +960,9 @@ async function pull(){
   if(!mcp||pulling) return false; pulling=true; setSync("","讀取中…");
   try{
     const pd=await rd("待決事項!A2:E80");           // 先單獨一個呼叫，讓授權提示只跳一次
-    const [tx,ac,ar,ck,cat,chk,cyc,fxr,wo,tgs]=await Promise.all([rd("交易!A2:V"),rd("帳戶!A2:M60"),rd("應收應付!A2:F20"),rd("核對清單!A2:K600"),rd("類別!A2:G400"),
-      rd("帳戶確認!A2:F3000").catch(()=>[]),rd("信用卡週期例外!A2:F300").catch(()=>[]),rd("匯率!A2:C500").catch(()=>[]),rd("沖銷對應!A2:F5000").catch(()=>[]),rd("標籤!A2:E300").catch(()=>[])]);
-    RAW={tx,ac,ar,pd,ck,cat,chk,cyc,fxr,wo,tgs,at:Date.now()}; build(RAW); cset("sheet",RAW);
+    const [tx,ac,ar,ck,cat,chk,cyc,fxr,wo,tgs,pjs]=await Promise.all([rd("交易!A2:V"),rd("帳戶!A2:M60"),rd("應收應付!A2:F20"),rd("核對清單!A2:K600"),rd("類別!A2:G400"),
+      rd("帳戶確認!A2:F3000").catch(()=>[]),rd("信用卡週期例外!A2:F300").catch(()=>[]),rd("匯率!A2:C500").catch(()=>[]),rd("沖銷對應!A2:F5000").catch(()=>[]),rd("標籤!A2:E300").catch(()=>[]),rd("專案!A2:F300").catch(()=>[])]);
+    RAW={tx,ac,ar,pd,ck,cat,chk,cyc,fxr,wo,tgs,pjs,at:Date.now()}; build(RAW); cset("sheet",RAW);
     src="sheet"; lastErr=null; lastPull=Date.now(); boot(); setSync("on","已連試算表");
     return true;
   }catch(e){ lastErr=e; setSync("off",D?"離線快照":"未連線"); render(); return false; }
@@ -1601,7 +1676,7 @@ function setHtml(){
     const ks=Object.keys(odd).sort((a,b)=>odd[b]-odd[a]);
     if(ks.length) h+=`<div class="sgrp odd"><div class="smain"><b class="sname0">不在類別表裡的舊類別</b><span class="scnt">${ks.length} 種</span></div>
       ${ks.map(k=>{const [a,b]=k.split("|"); return `<div class="ssub"><span class="sname">${esc(a)}${b&&b!==a?" › "+esc(b):""}</span><button class="scnt lnk2" data-sopen="${esc(tab)}|${esc(a)}|${esc(b)}">${odd[k]} 筆 ›</button></div>`}).join("")}</div>`; }
-  h+=`<div class="note"><button class="btn sm" id="cfgopen">連線設定（後端網址、密碼）</button></div>`;
+  h+=`<div class="note setlinks"><button class="btn sm" id="cfgopen">連線設定（後端網址、密碼）</button><button class="btn sm" id="pinchg">更改 PIN 碼</button><button class="btn sm" id="pinlocknow">立刻上鎖</button></div>`;
   h+=`<div class="note">年度結算（每年 6 月、12 月）時，我會提醒你把用很少的子類別合併或收斂。灰色＝已隱藏，記帳選單不會出現，但舊紀錄保留。</div>`;
   if(SC.confirm){
     const ren=SC.ren.filter(r=>r.n>0);
@@ -2191,8 +2266,9 @@ const ACF={"e-pj":"pj","e-mc":"mc","bs-mc":"mc"}, ACL={pj:"專案",mc:"商家"};
 function pjList(f){ f=f||"pj"; const m=new Map(); for(const t of D.tx){ const v=t[f]; if(!v) continue; const o=m.get(v)||{n:v,c:0,last:""}; o.c++; if(t.d>o.last) o.last=t.d; m.set(v,o); }
   return [...m.values()].sort((a,b)=>b.last.localeCompare(a.last)||b.c-a.c); }
 function pjShow(el){ if(!el||el.disabled) return; const f=ACF[el.id]||"pj", L=ACL[f], q=el.value.trim(), all=pjList(f);
-  const ql=q.toLowerCase(), hit=q?all.filter(o=>o.n.toLowerCase().includes(ql)):all, exact=all.some(o=>o.n===q);
-  const items=hit.slice(0,30).map(o=>({v:o.n,lab:o.n,sub:o.c+" 筆・最近 "+o.last.slice(2).replace(/-/g,"/")}));
+  const isArch=o=>f==="pj"&&D.projs&&D.projs.get(o.n)&&D.projs.get(o.n).arch;
+  const ql=q.toLowerCase(), hit=q?all.filter(o=>o.n.toLowerCase().includes(ql)):all.filter(o=>!isArch(o)), exact=all.some(o=>o.n===q);
+  const items=hit.slice(0,30).map(o=>({v:o.n,lab:o.n,sub:(isArch(o)?"已封存・":"")+o.c+" 筆・最近 "+o.last.slice(2).replace(/-/g,"/")}));
   if(q&&!exact) items.push({v:q,lab:"＋ 新增"+L+"「"+q+"」",sub:"存檔後就會出現在清單裡",add:true});
   if(el.value) items.push({v:"",lab:"清除"+L,sub:"",clr:true});
   let dd=document.getElementById("pjdd"); if(!dd){ dd=document.createElement("div"); dd.id="pjdd"; dd.className="pjdd"; dd.setAttribute("role","listbox"); }
@@ -2233,31 +2309,80 @@ function tagSecHtml(r){
   return `<div class="sec"><span class="t">標籤統計</span><span class="s">本期・點標籤看明細</span></div>
     <div class="stpjl">${arr.length?arr.map(x=>`<button class="stpr" data-sttag="${esc(x.k)}"><span class="stpn"><b>${esc(x.k)}</b><span>${x.n} 筆</span></span>
       <span class="stpv"><span class="e">支 ${N(x.exp)}</span>${x.inc?`<span class="i">收 ${N(x.inc)}</span>`:""}</span></button>`).join(""):`<div class="empty"><b>這期沒有加標籤的紀錄</b></div>`}</div>`; }
+function pjInfo(k){ return (D.projs&&D.projs.get(k))||null; }
+function pjPeriod(o){ return o&&(o.s||o.e)?(o.s?o.s.slice(2).replace(/-/g,"/"):"…")+" – "+(o.e?o.e.slice(2).replace(/-/g,"/"):"…"):""; }
+let stArchOpen=false;
 function projSecHtml(r){
   const xs=stScope==="cur"?D.tx.filter(t=>t.d>=r.s&&t.d<=r.e):D.tx;
   const by=new Map(); for(const t of xs){ const k=t.pj||NOPJ; if(!by.has(k)) by.set(k,[]); by.get(k).push(t); }
+  if(stScope==="all") for(const [k,o] of (D.projs||new Map())) if(!by.has(k)) by.set(k,[]);
   const N=v=>"NT$"+Math.round(Math.abs(v)).toLocaleString("en-US");
-  const arr=[...by.entries()].map(([k,l])=>({k,...pjSum(l)})).sort((a,b)=>(a.k===NOPJ)-(b.k===NOPJ)||b.exp-a.exp||b.n-a.n);
+  const arr=[...by.entries()].map(([k,l])=>({k,info:pjInfo(k),...pjSum(l)})).sort((a,b)=>(a.k===NOPJ)-(b.k===NOPJ)||b.exp-a.exp||b.n-a.n);
+  const act=arr.filter(x=>!(x.info&&x.info.arch)), arch=arr.filter(x=>x.info&&x.info.arch);
+  const row=x=>`<button class="stpr${x.info&&x.info.arch?" arch":""}" data-stproj="${esc(x.k)}"><span class="stpn"><b>${esc(x.k)}${x.info?`<span class="pjbadge ${x.info.arch?"a":""}">${x.info.arch?"已封存":esc(x.info.type)}</span>`:""}</b><span>${x.n} 筆・${x.info&&pjPeriod(x.info)?"期間 "+esc(pjPeriod(x.info)):x.first?esc(x.first.slice(2).replace(/-/g,"/"))+(x.last!==x.first?" – "+esc(x.last.slice(2).replace(/-/g,"/")):""):""}</span></span>
+      <span class="stpv"><span class="e">支 ${N(x.exp)}</span><span class="i">收 ${N(x.inc)}</span><b class="${x.net<0?"n":"p"}">${x.net<0?"−":"+"}${N(x.net)}</b></span></button>`;
   return `<div class="sec"><span class="t">專案統計</span><span class="s">點專案看明細</span></div>
     <div class="seg stseg2">${[["cur","本期（"+esc(r.sh)+"）"],["all","全部期間"]].map(([k,l])=>`<button class="${stScope===k?"on":""}" data-stscope="${k}">${l}</button>`).join("")}</div>
-    <div class="stpjl">${arr.length?arr.map(x=>`<button class="stpr" data-stproj="${esc(x.k)}"><span class="stpn"><b>${esc(x.k)}</b><span>${x.n} 筆・${esc(x.first.slice(2).replace(/-/g,"/"))}${x.last!==x.first?" – "+esc(x.last.slice(2).replace(/-/g,"/")):""}</span></span>
-      <span class="stpv"><span class="e">支 ${N(x.exp)}</span><span class="i">收 ${N(x.inc)}</span><b class="${x.net<0?"n":"p"}">${x.net<0?"−":"+"}${N(x.net)}</b></span></button>`).join(""):`<div class="empty"><b>這期沒有紀錄</b></div>`}</div>`; }
+    <div class="stpjl">${act.length?act.map(row).join(""):`<div class="empty"><b>這期沒有紀錄</b></div>`}</div>
+    ${arch.length?`<button class="pjarch" id="pjarch" aria-expanded="${stArchOpen}">${stArchOpen?"▾":"▸"} 已封存的專案（${arch.length}）</button>${stArchOpen?`<div class="stpjl">${arch.map(row).join("")}</div>`:""}`:""}`; }
+let stYear="";
+function pjCatHtml(xs){ const N=v=>"NT$"+Math.round(Math.abs(v)).toLocaleString("en-US"), m=new Map(); let tot0=0;
+  for(const t of xs){ if(!stExp(t)) continue; const v=-twdOf(t); tot0+=v; const k=t.c1||t.k; m.set(k,(m.get(k)||0)+v); }
+  const rows=[...m.entries()].filter(([k,v])=>Math.abs(v)>0.5).sort((a,b)=>b[1]-a[1]); if(!rows.length) return "";
+  const big=Math.max(...rows.map(r=>r[1]));
+  return `<div class="sec"><span class="t">支出類別</span><span class="s">共 ${N(tot0)}</span></div><div class="pjcats">${rows.map(([k,v])=>`<div class="stsub"><span>${esc(k)}</span><span class="stbar"><i style="width:${Math.max(2,v/big*100)}%;background:${ccat(k,"","支出")}"></i></span><b>${N(v)}・${(v/tot0*100).toFixed(0)}%</b></div>`).join("")}</div>`; }
+function pjAccHtml(xs){ const N=v=>"NT$"+Math.round(Math.abs(v)).toLocaleString("en-US"), m=new Map();
+  for(const t of xs){ if(!stExp(t)&&t.k!=="收入") continue; m.set(t.a,(m.get(t.a)||0)+twdOf(t)); }
+  const rows=[...m.entries()].sort((a,b)=>a[1]-b[1]); if(!rows.length) return "";
+  return `<div class="sec"><span class="t">付款帳戶</span></div><div class="stacc">${rows.map(([a,v])=>`<div class="sta"><span class="stan">${esc(a)}</span><b class="${v<0?"n":""}">${v<0?"-":""}${N(v)}</b><span></span></div>`).join("")}</div>`; }
+function pjMonthHtml(xs){ const N=v=>Math.round(Math.abs(v)).toLocaleString("en-US"), m=new Map();
+  for(const t of xs){ const k=t.d.slice(0,7); if(!m.has(k)) m.set(k,{e:0,i:0,n:0}); const o=m.get(k); o.n++; if(stExp(t)) o.e+=-twdOf(t); else if(t.k==="收入") o.i+=twdOf(t); }
+  const ks=[...m.keys()].sort().reverse(); if(ks.length<2) return "";
+  return `<div class="sec"><span class="t">逐月</span><span class="s">支出／收入</span></div><div class="stacc">${ks.map(k=>{ const o=m.get(k); return `<div class="sta"><span class="stan">${k.replace("-","/")}（${o.n} 筆）</span><b class="n">-${N(o.e)}</b><span class="stac p">+${N(o.i)}</span></div>`; }).join("")}</div>`; }
 function projDetailHtml(){
-  const k=stProj, xs=D.tx.filter(t=>(t.pj||NOPJ)===k).sort((a,b)=>tkey(b).localeCompare(tkey(a))), sm=pjSum(xs);
+  const k=stProj, info=pjInfo(k), all=D.tx.filter(t=>(t.pj||NOPJ)===k).sort((a,b)=>tkey(b).localeCompare(tkey(a)));
+  const yearly=!info||info.type!=="活動";
+  const years=[...new Set(all.map(t=>t.d.slice(0,4)))].sort().reverse();
+  if(yearly&&stYear&&!years.includes(stYear)) stYear="";
+  const xs=yearly&&stYear?all.filter(t=>t.d.startsWith(stYear)):all, sm=pjSum(xs);
   const N=v=>"NT$"+Math.round(Math.abs(v)).toLocaleString("en-US");
+  const out=info&&info.s&&info.e?all.filter(t=>t.d<info.s||t.d>info.e).length:0;
   const shown=xs.slice(0,stLim); let cur=null; const byDay=[];
   for(const t of shown){ if(!cur||cur.d!==t.d){ cur={d:t.d,l:[]}; byDay.push(cur); } cur.l.push(t); }
-  return `<div class="stw"><button class="stback" id="stback">‹ 返回統計</button>
+  const head=`<div class="pjhead"><div><b>${esc(k)}</b>${info?`<span class="pjbadge ${info.arch?"a":""}">${info.arch?"已封存":esc(info.type)}</span>`:""}
+      <div class="pjsub">${info&&pjPeriod(info)?"期間 "+esc(pjPeriod(info)):"沒有設定期間"}${info&&info.note?"・"+esc(info.note):""}</div></div>
+      ${k!==NOPJ?`<button class="btn sm" id="pjset">⚙ 專案設定</button>`:""}</div>`;
+  const yt=yearly&&years.length>1?`<div class="seg stseg2 pjyears">${[["","全部"]].concat(years.map(y=>[y,y])).map(([v,l])=>`<button class="${stYear===v?"on":""}" data-pjyear="${v}">${l}</button>`).join("")}</div>`:"";
+  return `<div class="stw"><button class="stback" id="stback">‹ 返回統計</button>${head}${yt}
+    ${out?`<div class="missline">有 ${out} 筆紀錄的日期不在專案期間內</div>`:""}
     <div class="stc3">
       <div class="stk inc"><span>收入</span><b>${N(sm.inc)}</b></div>
       <div class="stk exp"><span>支出</span><b>${N(sm.exp)}</b></div>
       <div class="stk ${sm.net<0?"neg":"pos"}"><span>結餘</span><b>${sm.net<0?"-":""}${N(sm.net)}</b></div></div>
-    <div class="sec"><span class="t">${xs.length.toLocaleString("zh-TW")} 筆</span><span class="s">${esc(sm.first.replace(/-/g,"/"))} – ${esc(sm.last.replace(/-/g,"/"))}・全部期間</span></div>
-    ${byDay.map(g=>{ const all=xs.filter(t=>t.d===g.d), kk=all.filter(t=>t.r==="ok").length, st=kk===all.length?"ok":kk?"part":"";
-      return `<div class="dayh"><span class="dt">${g.d.replace(/-/g,"/")}（週${DOW[parse(g.d).getDay()]}）</span><span class="dc">${all.length} 筆・已對 ${kk}</span></div>
+    ${pjCatHtml(xs)}${yearly?pjMonthHtml(xs):""}${pjAccHtml(xs)}
+    <div class="sec"><span class="t">明細 ${xs.length.toLocaleString("zh-TW")} 筆</span><span class="s">${xs.length?esc(sm.first.replace(/-/g,"/"))+" – "+esc(sm.last.replace(/-/g,"/")):""}</span></div>
+    ${byDay.map(g=>{ const dl=xs.filter(t=>t.d===g.d), kk=dl.filter(t=>t.r==="ok").length;
+      return `<div class="dayh"><span class="dt">${g.d.replace(/-/g,"/")}（週${DOW[parse(g.d).getDay()]}）</span><span class="dc">${dl.length} 筆・已對 ${kk}</span></div>
         <div class="list">${grpHtml(g.l,{id:1})}</div>`; }).join("")}
     ${xs.length>stLim?`<button class="more" id="stmore">再顯示 ${Math.min(80,xs.length-stLim)} 筆（還有 ${(xs.length-stLim).toLocaleString("zh-TW")} 筆）</button>`:""}
   </div>`; }
+function pjSetOpen(){ const k=stProj, o=pjInfo(k)||{type:"活動",s:"",e:"",arch:false,note:""};
+  $("modal").innerHTML=`<div class="sheet" id="sheet"><div class="sheetin" role="dialog" aria-label="專案設定"><h3>專案設定・${esc(k)}</h3>
+    <div class="sh">「活動」適合旅行、單次活動：有開始和結束日，結束後可以封存，整個期間一次總覽。「年度」適合日常生活這類持續記的：不封存，用年份切換看每年。</div>
+    <div class="bsrow"><span class="bsf">類型</span><select id="pj-type"><option${o.type==="活動"?" selected":""}>活動</option><option${o.type==="年度"?" selected":""}>年度</option></select></div>
+    <div class="bsrow"><span class="bsf">開始</span><input id="pj-s" type="date" class="ein" value="${esc(o.s)}"></div>
+    <div class="bsrow"><span class="bsf">結束</span><input id="pj-e" type="date" class="ein" value="${esc(o.e)}"></div>
+    <div class="bsrow"><span class="bsf">備註</span><input id="pj-note" class="ein" value="${esc(o.note)}"></div>
+    <label class="bsrow"><input type="checkbox" id="pj-arch"${o.arch?" checked":""}> <b>封存</b>（不再出現在記帳的專案選單，統計移到「已封存」）</label>
+    <div class="btns"><button class="btn" id="cancel">取消</button><button class="btn primary" id="pj-go">儲存</button></div></div></div>`; }
+async function pjSetSave(){ if(!canWrite()) return; const k=stProj, o=pjInfo(k);
+  const row=[k,$("pj-type").value,$("pj-s").value,$("pj-e").value,$("pj-arch").checked?"已封存":"進行中",$("pj-note").value.trim()];
+  if(row[2]&&row[3]&&row[2]>row[3]){ toast("開始日不能晚於結束日"); return; }
+  const b=$("pj-go"); b.disabled=true; b.textContent="寫入中…";
+  try{ if(o&&o.row){ await call("update_values",{spreadsheetId:SID,range:`專案!A${o.row}:F${o.row}`,values:[row]}); RAW.pjs[o.row-2]=row; }
+    else { await call("append_values",{spreadsheetId:SID,range:"專案!A1:F1",values:[row]}); (RAW.pjs=RAW.pjs||[]).push(row); }
+    build(RAW); cset("sheet",RAW); $("modal").innerHTML=""; render(); toast("專案設定已儲存"); }
+  catch(e){ b.disabled=false; b.textContent="儲存"; toast("沒有寫入："+errMsg(e)); } }
 const isoD=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 function stRange(p,off){
   const t=new Date(D.meta.today+"T12:00:00");
@@ -2609,7 +2734,11 @@ document.addEventListener("click",e=>{
   const stt=e.target.closest("[data-sttag]"); if(stt){ auditTag=stt.dataset.sttag; auditQ=""; auditAcct=""; auditMonth=""; alim=50; view="list"; document.querySelectorAll("nav button[data-v]").forEach(b=>b.setAttribute("aria-current",String(b.dataset.v==="list"))); render(); window.scrollTo(0,0); return; }
   const sps=e.target.closest("[data-stscope]"); if(sps){ stScope=sps.dataset.stscope; render(); return; }
   const spr=e.target.closest("[data-stproj]"); if(spr){ stProj=spr.dataset.stproj; stLim=80; render(); window.scrollTo(0,0); return; }
-  if(e.target.closest("#stback")){ stProj=null; render(); return; }
+  if(e.target.closest("#stback")){ stProj=null; stYear=""; render(); return; }
+  if(e.target.closest("#pjarch")){ stArchOpen=!stArchOpen; render(); return; }
+  const pjy=e.target.closest("[data-pjyear]"); if(pjy){ stYear=pjy.dataset.pjyear; stLim=80; render(); return; }
+  if(e.target.closest("#pjset")){ pjSetOpen(); return; }
+  if(e.target.closest("#pj-go")){ pjSetSave(); return; }
   if(e.target.closest("#stmore")){ stLim+=80; render(); return; }
   if(e.target.closest("#stprev")){ stOff--; render(); return; }
   if(e.target.closest("#stnext")){ if(stOff<0) stOff++; render(); return; }
