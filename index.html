@@ -91,6 +91,10 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .sec .s .sep{color:var(--line);font-weight:300}
 .sec .s .o{color:var(--neg);font-weight:500}
 .sec .s .i{color:var(--pos);font-weight:500}
+/* 統計頁的段落標題：色塊＋左側色條，段落之間留白 */
+.stw .sec{margin:26px 0 10px;padding:9px 12px;background:var(--sunk);border-radius:10px;box-shadow:inset 4px 0 0 var(--accent);align-items:center}
+.stw .sec .t{font-size:14px;letter-spacing:.02em}
+.stw .sec:first-child{margin-top:8px}
 
 /* 交易列（參照 MOZE 版面） */
 .list{display:flex;flex-direction:column;gap:2px}
@@ -381,6 +385,7 @@ body.locked .app,body.locked nav{visibility:hidden}
 .lkeys button:active{filter:brightness(.85)}
 .lock .lfoot{appearance:none;border:0;background:none;color:var(--accent);font:inherit;font-size:13px;cursor:pointer}
 .lock .lform{display:flex;flex-direction:column;gap:10px;width:min(320px,100%)}.lock .lform .ein{font:inherit;font-size:15px;padding:10px 12px;text-align:left}
+.lmset{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--fg-2)}.lmset select{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg)}
 
 .rfbox{font-size:12px;color:var(--fg-2);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:10px;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .lockn{font-size:12px;color:var(--pos);background:color-mix(in srgb,var(--pos) 10%,var(--card));border-radius:8px;padding:8px 10px;margin-bottom:10px}
@@ -840,16 +845,24 @@ function setupHtml(msg,tmp){ const c=tmp||getCfg()||{};
 function showSetup(msg,tmp){ $("view").innerHTML=setupHtml(msg,tmp); $("title").textContent="連線設定"; }
 async function cfgSave(){ const url=$("cfg-url").value.trim(), token=$("cfg-tok").value.trim(); if(!url||!token){ showSetup("兩格都要填",{url,token}); return; }
   const b=$("cfg-go"); b.disabled=true; b.textContent="測試中…";
-  try{ await apiPost("ping",{}, {url,token}); setCfg({url,token}); mcp=apiClient(); toast("連線成功，正在讀取帳本…"); const ok=await pull(); if(ok&&!getPin()) lockShow("set"); if(!ok) showSetup("連線成功，但讀帳本失敗："+errMsg(lastErr),{url,token}); }
+  try{ await apiPost("ping",{}, {url,token}); setCfg({url,token}); mcp=apiClient(); toast("連線成功，正在讀取帳本…"); const ok=await pull(); if(ok){ await pinSync(); if(!getPin()&&!LK) lockShow("set"); } if(!ok) showSetup("連線成功，但讀帳本失敗："+errMsg(lastErr),{url,token}); }
   catch(e){ showSetup("連不上："+errMsg(e),{url,token}); } }
 document.addEventListener("click",e=>{ if(e.target.closest("#cfg-go")){ cfgSave(); } else if(e.target.closest("#cfg-x")){ render(); } else if(e.target.closest("#cfgopen")){ showSetup(); } });
 if("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 
 /* ── PIN 鎖：4–6 位數字，只存雜湊在這台裝置 ── */
-const PINK="mmjz.pin", LOCKMIN=3;
+const PINK="mmjz.pin", LMK="mmjz.lockmin";
+const lockMin=()=>{ const v=Number((getPin()||{}).lockMin||localStorage.getItem(LMK)||5); return Math.min(60,Math.max(1,v||5)); };
 const getPin=()=>{ try{ return JSON.parse(localStorage.getItem(PINK)||"null"); }catch(e){ return null; } };
 async function pinHash(pin,salt){ const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(salt+"|"+pin)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join(""); }
-async function pinStore(pin){ const salt=[...crypto.getRandomValues(new Uint8Array(12))].map(x=>x.toString(16).padStart(2,"0")).join(""); localStorage.setItem(PINK,JSON.stringify({salt,h:await pinHash(pin,salt)})); }
+async function pinStore(pin){ const salt=[...crypto.getRandomValues(new Uint8Array(12))].map(x=>x.toString(16).padStart(2,"0")).join("");
+  const o={salt,h:await pinHash(pin,salt),lockMin:lockMin(),at:Date.now()}; localStorage.setItem(PINK,JSON.stringify(o)); pinPush(o); }
+/* 跨裝置同步：PIN 雜湊和上鎖時間存在後端（指令碼屬性），每台裝置打開時抓最新的 */
+async function pinPush(o){ try{ await apiPost("pin_set",{pin:o}); }catch(e){ if(e&&e.code==="bad_tool") toast("後端還沒更新，PIN 只存在這台裝置"); } }
+async function pinSync(){ if(!getCfg()) return; try{ const r=await apiPost("pin_get",{}); const rem=r.payload&&r.payload.pin, loc=getPin();
+    if(rem&&rem.h){ if(!loc||loc.h!==rem.h||loc.lockMin!==rem.lockMin){ localStorage.setItem(PINK,JSON.stringify(rem)); if(!loc&&!LK) lockShow("unlock"); else if(LK&&LK.mode==="set"&&!LK.first&&!LK.buf){ lockShow("unlock"); } } }
+    else if(loc&&loc.h){ pinPush(loc); } }catch(e){} }
+function lockMinSet(v){ v=Math.min(60,Math.max(1,Number(v)||5)); localStorage.setItem(LMK,String(v)); const P=getPin(); if(P){ P.lockMin=v; P.at=Date.now(); localStorage.setItem(PINK,JSON.stringify(P)); pinPush(P); } toast("離開超過 "+v+" 分鐘會自動上鎖"); }
 let LK=null, hiddenAt=0;
 function lockShow(mode){ // mode: unlock | set | change-old | forgot
   LK={mode,buf:"",first:null,fails:LK&&LK.fails||0,until:LK&&LK.until||0,msg:""}; document.body.classList.add("locked"); $("lock").hidden=false; lockPaint(); }
@@ -880,7 +893,7 @@ async function lockTry(explicit){ const P=getPin();
     if(!/^\d{4,6}$/.test(LK.buf)){ LK.msg="PIN 要 4–6 位數字"; lockPaint(); return; }
     if(!LK.first){ LK.first=LK.buf; LK.buf=""; LK.msg=""; lockPaint(); return; }
     if(LK.first!==LK.buf){ LK.first=null; LK.buf=""; LK.msg="兩次不一樣，請重新設定"; lockPaint(); return; }
-    await pinStore(LK.buf); lockHide(); toast("PIN 已設定，之後打開或離開 "+LOCKMIN+" 分鐘就會上鎖"); } }
+    await pinStore(LK.buf); lockHide(); toast("PIN 已設定，所有裝置都會用這組；離開超過 "+lockMin()+" 分鐘會上鎖"); } }
 document.addEventListener("pointerdown",e=>{ const b=e.target.closest&&e.target.closest("#lock [data-lk]"); if(b){ e.preventDefault(); lockKey(b.dataset.lk); } });
 document.addEventListener("click",async e=>{ if(!e.target.closest) return;
   if(e.target.closest("#lk-forgot")){ LK.mode="forgot"; LK.msg=""; lockPaint(); }
@@ -890,9 +903,10 @@ document.addEventListener("click",async e=>{ if(!e.target.closest) return;
   else if(e.target.closest("#pinchg")){ lockShow(getPin()?"change-old":"set"); }
   else if(e.target.closest("#pinlocknow")){ if(getPin()) lockShow("unlock"); else lockShow("set"); } });
 document.addEventListener("keydown",e=>{ if(!LK||LK.mode==="forgot") return; if(/^\d$/.test(e.key)){ e.preventDefault(); lockKey(e.key); } else if(e.key==="Backspace"){ e.preventDefault(); lockKey("bs"); } else if(e.key==="Enter"){ e.preventDefault(); lockKey("ok"); } });
-document.addEventListener("visibilitychange",()=>{ if(document.hidden){ hiddenAt=Date.now(); } else if(hiddenAt&&Date.now()-hiddenAt>LOCKMIN*60000&&getPin()&&!LK){ lockShow("unlock"); } });
+document.addEventListener("visibilitychange",()=>{ if(document.hidden){ hiddenAt=Date.now(); } else if(hiddenAt&&Date.now()-hiddenAt>lockMin()*60000&&getPin()&&!LK){ lockShow("unlock"); } });
+document.addEventListener("change",e=>{ if(e.target&&e.target.id==="lockmin") lockMinSet(e.target.value); });
 /* 開啟時：有 PIN 就上鎖；還沒設定就先設定（已有連線設定時） */
-(function(){ const go=()=>{ if(getPin()) lockShow("unlock"); else if(getCfg()) lockShow("set"); };
+(function(){ const go=()=>{ if(getPin()) lockShow("unlock"); else if(getCfg()) lockShow("set"); pinSync(); };
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",go); else setTimeout(go,0); })();
 
 function vals(r){let p=r&&r.payload;if(typeof p==="string"){try{p=JSON.parse(p)}catch(e){}}return (p&&p.values)||[]}
@@ -1676,7 +1690,8 @@ function setHtml(){
     const ks=Object.keys(odd).sort((a,b)=>odd[b]-odd[a]);
     if(ks.length) h+=`<div class="sgrp odd"><div class="smain"><b class="sname0">不在類別表裡的舊類別</b><span class="scnt">${ks.length} 種</span></div>
       ${ks.map(k=>{const [a,b]=k.split("|"); return `<div class="ssub"><span class="sname">${esc(a)}${b&&b!==a?" › "+esc(b):""}</span><button class="scnt lnk2" data-sopen="${esc(tab)}|${esc(a)}|${esc(b)}">${odd[k]} 筆 ›</button></div>`}).join("")}</div>`; }
-  h+=`<div class="note setlinks"><button class="btn sm" id="cfgopen">連線設定（後端網址、密碼）</button><button class="btn sm" id="pinchg">更改 PIN 碼</button><button class="btn sm" id="pinlocknow">立刻上鎖</button></div>`;
+  h+=`<div class="note setlinks"><button class="btn sm" id="cfgopen">連線設定（後端網址、密碼）</button><button class="btn sm" id="pinchg">更改 PIN 碼</button><button class="btn sm" id="pinlocknow">立刻上鎖</button>
+    <label class="lmset">離開多久自動上鎖 <select id="lockmin">${[1,2,3,5,10,15,20,30,45,60].map(v=>`<option value="${v}"${v===lockMin()?" selected":""}>${v} 分鐘</option>`).join("")}</select></label></div>`;
   h+=`<div class="note">年度結算（每年 6 月、12 月）時，我會提醒你把用很少的子類別合併或收斂。灰色＝已隱藏，記帳選單不會出現，但舊紀錄保留。</div>`;
   if(SC.confirm){
     const ren=SC.ren.filter(r=>r.n>0);
